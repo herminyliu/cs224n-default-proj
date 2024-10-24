@@ -29,17 +29,9 @@ Parts of the code are from the [`transformers`](https://github.com/huggingface/t
 
 
 
-# CS 224N Default Project - My Implementation
+# CS 224N Default Final Project - My Implementation
 
-## My implementation Overview
-
-This is my implement of  the Stanford course CS224N default project in Spring 2024. Let me quote part of the handout on the contents of this default project:
-
->The default final project has two parts. In the first part, you will fill in missing code blocks to complete an implementation of the BERT model. Using pre-trained weights loaded into your BERT model, you will perform sentiment analysis on the SST dataset and the CFIMDB dataset.
->
->In the second part, you will explore extensions of your BERT model to achieve the highest performance that you can on multiple sentence-level tasks: sentiment analysis, paraphrase detection, and semantic textual similarity. The goal of this section is for you to engineer and experiment with improvements to your BERT model to obtain robust and generalizable sentence embeddings that perform well in more than one setting.
-
-## Part1: Implementation of  the Multi-head Self-attention and Transformer Layers of the Original BERT Model
+## Part 1: Implementation of the Multi-head Self-attention and Transformer Layers of the Original BERT Model
 
 *base_bert.py* should not be modified, since it provides the class *BertPreTrainedModel* which the BertModel class in *bert.py* inherited this.
 
@@ -51,23 +43,24 @@ In *bert.py*, there are three classes together formed the miniBERT structure.
 
 - BertModel: The whole miniBERT model which is made up of many BertLayers.
 
-## Part2: Self-defined Adam Optimizer Implementation
+## Part 2: Self-defined Adam Optimizer Implementation
 
 In *optimizer.py*, a self-defined AdamW class is defined and used as the optimizer in *classifier.py*.
 
-## Part3: Perform Sentiment Classification Based on Finished Works
+## Part 3: Perform Sentiment Classification Based on Finished Works
 
 In *classifier.py*, Sentiment Classification is performed using the model and optimizer implemented before.
 
 The accuracy my model obtained using the developing set for two fine tune modes {full-model, last-linear-layer} on the dataset {SST, CFIMDB}
 
-- full-model mode: require gradient computation and adjustment in bert model
-- last-linear-layer mode: don’t require gradient computation in bert model
+> full-model mode: require gradient computation and adjustment in bert model
+> 
+> last-linear-layer mode: don’t require gradient computation in bert model
 
-- Fine-tuning the last linear layer for SST: Dev Accuracy : 0.396
-- Fine-tuning the last linear layer for CFIMDB: Dev Accuracy : 0.804
-- Fine-tuning the full model for SST: Dev Accuracy : 0.526
-- Fine-tuning the full model for CFIMDB: Dev Accuracy : 0.955
+- Fine-tuning the last linear layer for SST: Dev Accuracy : **0.396**
+- Fine-tuning the last linear layer for CFIMDB: Dev Accuracy : **0.804**
+- Fine-tuning the full model for SST: Dev Accuracy : **0.526**
+- Fine-tuning the full model for CFIMDB: Dev Accuracy : **0.955**
 
 Note: 
 
@@ -75,14 +68,14 @@ Note:
 
 2. In mainland China hugging face can not be visited without VPN. Even when I use a VPN and switched it to the global mode, there is still something wrong with the Internet connection on my machine, so I manually download pytorch_model.bin, vocab.txt and config.json from https://huggingface.co/google-bert/bert-base-uncased/tree/main and place it in the folder ./bert-base-uncased-manual-download, and set local_files_only to be True. Files under the folder ./bert-base-uncased-manual-download is not tracked by git.
 
-: 2.1 If you prefer to manually download the files like me, remember to download the files and change the file path before you run this code. 
+>If you prefer to manually download the files like me, remember to download the files and change the file path before you run this code. 
 
 ```
 self.bert = BertModel.from_pretrained(r".\path\to\your\downloaded\files", local_files_only=True)
 self.tokenizer = BertTokenizer.from_pretrained(r".\path\to\your\downloaded\files", local_files_only=True)
 ```
 
-: 2.2 If you prefer to download automatically, remember to set local_files_only back to the default value False, and change the local file path to the model name 'bert-base-uncased'.
+>If you prefer to download automatically, remember to set local_files_only back to the default value False, and change the local file path to the model name 'bert-base-uncased'.
 
 ```
 self.bert = BertModel.from_pretrained('bert-base-uncased')
@@ -96,10 +89,10 @@ python3 classifier.py --fine-tune-mode {full-model,last-linear-layer} --lr {1e-3
 ```
 One of the batch whose seq length is 514 which is larger than 512, the max_position_embeddings. Thus, the position embedding length for that batch is still 512 not 514. Besides, the pretrained BERT model only can handle the seq no longer than 512. However, the input embedding and token embedding length for that batch is still 514. In bert.BertModel, at the start of the each sublayer, position embedding, input embedding and token embedding will be added together. As a result, a shape mismatch error occurred.
 
-The max_position_embeddings is set in config.BertConfig.__init__. Making the value larger will lead to mismatch between the retrained model params.
+The max_position_embeddings is set in `config.BertConfig.__init__`. Making the value larger will lead to mismatch between the retrained model params.
 
-I added a few lines to disregard the batches whose seq length is larger than 512 in classifier.train, classifier.model_eval, classifier.model_test_eval, bert.BertModel.forward, classifier.BertSentimentClassifier.forward.
+I added a few lines to disregard the batches whose seq length is larger than 512 in `classifier.train`, `classifier.model_eval`, `classifier.model_test_eval`, `bert.BertModel.forward`, `classifier.BertSentimentClassifier.forward`.
 
-## Part4: Free Extension on Multitasks
+## Part 4: Free Extension on Multitasks
 
 This part has not implemented for now.
