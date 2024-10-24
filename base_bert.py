@@ -107,7 +107,7 @@ class BertPreTrainedModel(nn.Module):
 
     config.name_or_path = pretrained_model_name_or_path
 
-    # Instantiate model.
+    # NOTE：Instantiate model.
     model = cls(config, *model_args, **model_kwargs)
 
     if state_dict is None:

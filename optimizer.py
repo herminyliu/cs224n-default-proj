@@ -18,9 +18,9 @@ class AdamW(Optimizer):
         if lr < 0.0:
             raise ValueError("Invalid learning rate: {} - should be >= 0.0".format(lr))
         if not 0.0 <= betas[0] < 1.0:
-            raise ValueError("Invalid beta parameter: {} - should be in [0.0, 1.0[".format(betas[0]))
+            raise ValueError("Invalid beta parameter: {} - should be in [0.0, 1.0]".format(betas[0]))
         if not 0.0 <= betas[1] < 1.0:
-            raise ValueError("Invalid beta parameter: {} - should be in [0.0, 1.0[".format(betas[1]))
+            raise ValueError("Invalid beta parameter: {} - should be in [0.0, 1.0]".format(betas[1]))
         if not 0.0 <= eps:
             raise ValueError("Invalid epsilon value: {} - should be >= 0.0".format(eps))
         defaults = dict(lr=lr, betas=betas, eps=eps, weight_decay=weight_decay, correct_bias=correct_bias)
@@ -44,6 +44,10 @@ class AdamW(Optimizer):
 
                 # Access hyperparameters from the `group` dictionary.
                 alpha = group["lr"]
+                betas = group["betas"]
+                eps = group['eps']
+                weight_decay = group['weight_decay']
+                correct_bias = group['correct_bias']
 
                 # Complete the implementation of AdamW here, reading and saving
                 # your state in the `state` dictionary above.
@@ -60,7 +64,21 @@ class AdamW(Optimizer):
                 # Refer to the default project handout for more details.
 
                 ### TODO
-                raise NotImplementedError
+                if len(state) == 0:
+                    state['t'] = 0
+                    state['m'] = torch.zeros(grad.size(), dtype=torch.float32).to(grad.device)
+                    state['v'] = torch.zeros(grad.size(), dtype=torch.float32).to(grad.device)
+
+                state['t'] = state['t'] + 1
+                grad_t = grad + weight_decay * p.data
+                # mt ← β1 · mt−1 + (1 − β1) · gt (Update biased first moment estimate)
+                state['m'] = betas[0] * state['m'] + (1.0 - betas[0]) * grad_t
+                # vt ← β2 · vt−1 + (1 − β2) · gt2 (Update biased second raw moment estimate)
+                state['v'] = betas[1] * state['v'] + (1.0 - betas[1]) * grad_t ** 2
+                # αt ← α · p1 − β2t /(1 − β1t )
+                alpha_t = alpha * math.sqrt(1.0 - betas[1] ** state['t']) / (1.0 - betas[0] ** state['t'])
+                # Update parameters (p.data).Apply weight decay after the main gradient-based updates.
+                p.data = p.data - (alpha_t * state['m']) / (torch.sqrt(state['v']) + eps) - alpha_t * weight_decay * p.data
 
 
         return loss

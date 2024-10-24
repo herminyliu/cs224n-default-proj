@@ -12,8 +12,7 @@ from bert import BertModel
 from optimizer import AdamW
 from tqdm import tqdm
 
-
-TQDM_DISABLE=False
+TQDM_DISABLE = False
 
 
 # Fix the random seed.
@@ -34,10 +33,12 @@ class BertSentimentClassifier(torch.nn.Module):
     In the SST dataset, there are 5 sentiment categories (from 0 - "negative" to 4 - "positive").
     Thus, your forward() should return one logit for each of the 5 classes.
     '''
+
     def __init__(self, config):
         super(BertSentimentClassifier, self).__init__()
         self.num_labels = config.num_labels
-        self.bert = BertModel.from_pretrained('bert-base-uncased')
+        self.bert = BertModel.from_pretrained(r".\bert-base-uncased-manual-download", local_files_only=True)
+        # BertModel inherit from BertPreTrainedModel, the method .from_pretrained is defined in BertPreTrainedModel.
 
         # Pretrain mode does not require updating BERT paramters.
         assert config.fine_tune_mode in ["last-linear-layer", "full-model"]
@@ -49,25 +50,42 @@ class BertSentimentClassifier(torch.nn.Module):
 
         # Create any instance variables you need to classify the sentiment of BERT embeddings.
         ### TODO
-        raise NotImplementedError
+        # Convert the final BERT contextualized embedding, the hidden state of [CLS] token to the prediction
+        # probabilities vector whose length is self.num_labels classes.
+        self.cls_hs_to_logits_proj = torch.nn.Linear(in_features=config.hidden_size, out_features=self.num_labels)
+        self.cls_hs_dropout = torch.nn.Dropout(p=config.hidden_dropout_prob)
 
-
-    def forward(self, input_ids, attention_mask):
+    def forward(self, input_ids, attention_mask, config):
         '''Takes a batch of sentences and returns logits for sentiment classes'''
         # The final BERT contextualized embedding is the hidden state of [CLS] token (the first token).
         # HINT: You should consider what is an appropriate return value given that
         # the training loop currently uses F.cross_entropy as the loss function.
         ### TODO
-        raise NotImplementedError
+        # The 'config' variable is added in order to retrieve config.max_position_embeddings in bert.Bertmodel.forward
+        output = self.bert(input_ids, attention_mask, config)
+        # The example of how forward function is used:
+        # logits = model(b_ids, b_mask)
+        # loss = F.cross_entropy(logits, b_labels.view(-1), reduction='sum') / args.batch_size
+        # From that we can tell this function should return a single variable
+        # The shape of pooler_output and last_hidden_state is
+        # [num_batches, batch_size, hidden_size=768(for base bert)]
+        # There need a linear projection to proj hidden_size -> self.num_labels
 
+        if output['oversize_flag']:
+            return 0, output['oversize_flag']
+
+        output['pooler_output'] = self.cls_hs_dropout(output['pooler_output'])
+        logits = self.cls_hs_to_logits_proj(output['pooler_output'])
+
+        # output['oversize_flag'] is a newly added return
+        return logits, output['oversize_flag']
 
 
 class SentimentDataset(Dataset):
     def __init__(self, dataset, args):
         self.dataset = dataset
         self.p = args
-        self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-
+        self.tokenizer = BertTokenizer.from_pretrained(r".\bert-base-uncased-manual-download", local_files_only=True)
     def __len__(self):
         return len(self.dataset)
 
@@ -87,15 +105,15 @@ class SentimentDataset(Dataset):
         return token_ids, attention_mask, labels, sents, sent_ids
 
     def collate_fn(self, all_data):
-        token_ids, attention_mask, labels, sents, sent_ids= self.pad_data(all_data)
+        token_ids, attention_mask, labels, sents, sent_ids = self.pad_data(all_data)
 
         batched_data = {
-                'token_ids': token_ids,
-                'attention_mask': attention_mask,
-                'labels': labels,
-                'sents': sents,
-                'sent_ids': sent_ids
-            }
+            'token_ids': token_ids,
+            'attention_mask': attention_mask,
+            'labels': labels,
+            'sents': sents,
+            'sent_ids': sent_ids
+        }
 
         return batched_data
 
@@ -104,7 +122,7 @@ class SentimentTestDataset(Dataset):
     def __init__(self, dataset, args):
         self.dataset = dataset
         self.p = args
-        self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+        self.tokenizer = BertTokenizer.from_pretrained(r".\bert-base-uncased-manual-download", local_files_only=True)
 
     def __len__(self):
         return len(self.dataset)
@@ -123,14 +141,14 @@ class SentimentTestDataset(Dataset):
         return token_ids, attention_mask, sents, sent_ids
 
     def collate_fn(self, all_data):
-        token_ids, attention_mask, sents, sent_ids= self.pad_data(all_data)
+        token_ids, attention_mask, sents, sent_ids = self.pad_data(all_data)
 
         batched_data = {
-                'token_ids': token_ids,
-                'attention_mask': attention_mask,
-                'sents': sents,
-                'sent_ids': sent_ids
-            }
+            'token_ids': token_ids,
+            'attention_mask': attention_mask,
+            'sents': sents,
+            'sent_ids': sent_ids
+        }
 
         return batched_data
 
@@ -140,20 +158,20 @@ def load_data(filename, flag='train'):
     num_labels = {}
     data = []
     if flag == 'test':
-        with open(filename, 'r') as fp:
-            for record in csv.DictReader(fp,delimiter = '\t'):
+        with open(filename, 'r', encoding='utf-8') as fp:
+            for record in csv.DictReader(fp, delimiter='\t'):
                 sent = record['sentence'].lower().strip()
                 sent_id = record['id'].lower().strip()
-                data.append((sent,sent_id))
+                data.append((sent, sent_id))
     else:
-        with open(filename, 'r') as fp:
-            for record in csv.DictReader(fp,delimiter = '\t'):
+        with open(filename, 'r', encoding='utf-8') as fp:
+            for record in csv.DictReader(fp, delimiter='\t'):
                 sent = record['sentence'].lower().strip()
                 sent_id = record['id'].lower().strip()
                 label = int(record['sentiment'].strip())
                 if label not in num_labels:
                     num_labels[label] = len(num_labels)
-                data.append((sent, label,sent_id))
+                data.append((sent, label, sent_id))
         print(f"load {len(data)} data from {filename}")
 
     if flag == 'train':
@@ -162,21 +180,24 @@ def load_data(filename, flag='train'):
         return data
 
 
-# Evaluate the model on dev examples.
-def model_eval(dataloader, model, device):
-    model.eval() # Switch to eval model, will turn off randomness like dropout.
+# Evaluate the model on train/dev examples. Used in following train and test function
+def model_eval(dataloader, model, device, config):
+    model.eval()  # Switch to eval model, will turn off randomness like dropout.
     y_true = []
     y_pred = []
     sents = []
     sent_ids = []
     for step, batch in enumerate(tqdm(dataloader, desc=f'eval', disable=TQDM_DISABLE)):
-        b_ids, b_mask, b_labels, b_sents, b_sent_ids = batch['token_ids'],batch['attention_mask'],  \
-                                                        batch['labels'], batch['sents'], batch['sent_ids']
+        b_ids, b_mask, b_labels, b_sents, b_sent_ids = batch['token_ids'], batch['attention_mask'], \
+            batch['labels'], batch['sents'], batch['sent_ids']
 
         b_ids = b_ids.to(device)
         b_mask = b_mask.to(device)
 
-        logits = model(b_ids, b_mask)
+        logits, oversize_flag = model(b_ids, b_mask, config)
+        if oversize_flag:
+            # disregard this batch
+            continue
         logits = logits.detach().cpu().numpy()
         preds = np.argmax(logits, axis=1).flatten()
 
@@ -192,20 +213,23 @@ def model_eval(dataloader, model, device):
     return acc, f1, y_pred, y_true, sents, sent_ids
 
 
-# Evaluate the model on test examples.
-def model_test_eval(dataloader, model, device):
-    model.eval() # Switch to eval model, will turn off randomness like dropout.
+# Evaluate the model on test examples. Used in the following test function.
+def model_test_eval(dataloader, model, device, config):
+    model.eval()  # Switch to eval model, will turn off randomness like dropout.
     y_pred = []
     sents = []
     sent_ids = []
     for step, batch in enumerate(tqdm(dataloader, desc=f'eval', disable=TQDM_DISABLE)):
-        b_ids, b_mask, b_sents, b_sent_ids = batch['token_ids'],batch['attention_mask'],  \
-                                                         batch['sents'], batch['sent_ids']
+        b_ids, b_mask, b_sents, b_sent_ids = batch['token_ids'], batch['attention_mask'], \
+            batch['sents'], batch['sent_ids']
 
         b_ids = b_ids.to(device)
         b_mask = b_mask.to(device)
 
-        logits = model(b_ids, b_mask)
+        logits, oversize_flag = model(b_ids, b_mask, config)
+        if oversize_flag:
+            # disregard this batch
+            continue
         logits = logits.detach().cpu().numpy()
         preds = np.argmax(logits, axis=1).flatten()
 
@@ -246,11 +270,13 @@ def train(args):
                                 collate_fn=dev_dataset.collate_fn)
 
     # Init model.
+    # max_position_embeddings is newly added, the value 512 is retirved from config.py line 196
     config = {'hidden_dropout_prob': args.hidden_dropout_prob,
               'num_labels': num_labels,
               'hidden_size': 768,
               'data_dir': '.',
-              'fine_tune_mode': args.fine_tune_mode}
+              'fine_tune_mode': args.fine_tune_mode,
+              'max_position_embeddings': 512}
 
     config = SimpleNamespace(**config)
 
@@ -266,16 +292,24 @@ def train(args):
         model.train()
         train_loss = 0
         num_batches = 0
+        # debug_slice = 82
+        # debug_count = 0
         for batch in tqdm(train_dataloader, desc=f'train-{epoch}', disable=TQDM_DISABLE):
+            # if debug_count < debug_slice:
+            #     debug_count = debug_count + 1
+            #     continue
             b_ids, b_mask, b_labels = (batch['token_ids'],
                                        batch['attention_mask'], batch['labels'])
-
             b_ids = b_ids.to(device)
             b_mask = b_mask.to(device)
             b_labels = b_labels.to(device)
 
             optimizer.zero_grad()
-            logits = model(b_ids, b_mask)
+
+            logits, oversize_flag = model(b_ids, b_mask, config)
+            if oversize_flag:
+                # disregard this batch
+                continue
             loss = F.cross_entropy(logits, b_labels.view(-1), reduction='sum') / args.batch_size
 
             loss.backward()
@@ -286,14 +320,17 @@ def train(args):
 
         train_loss = train_loss / (num_batches)
 
-        train_acc, train_f1, *_  = model_eval(train_dataloader, model, device)
-        dev_acc, dev_f1, *_ = model_eval(dev_dataloader, model, device)
+        # NOTE: The dev dataset and validation set are the same thing
+        # Here not only do the evaluation on training set but also on the dev set.
+        train_acc, train_f1, *_ = model_eval(train_dataloader, model, device, config)
+        dev_acc, dev_f1, *_ = model_eval(dev_dataloader, model, device, config)
 
         if dev_acc > best_dev_acc:
             best_dev_acc = dev_acc
             save_model(model, optimizer, args, config, args.filepath)
 
-        print(f"Epoch {epoch}: train loss :: {train_loss :.3f}, train acc :: {train_acc :.3f}, dev acc :: {dev_acc :.3f}")
+        print(
+            f"Epoch {epoch}: train loss :: {train_loss :.3f}, train acc :: {train_acc :.3f}, dev acc :: {dev_acc :.3f}")
 
 
 def test(args):
@@ -305,28 +342,30 @@ def test(args):
         model.load_state_dict(saved['model'])
         model = model.to(device)
         print(f"load model from {args.filepath}")
-        
+
         dev_data = load_data(args.dev, 'valid')
         dev_dataset = SentimentDataset(dev_data, args)
-        dev_dataloader = DataLoader(dev_dataset, shuffle=False, batch_size=args.batch_size, collate_fn=dev_dataset.collate_fn)
+        dev_dataloader = DataLoader(dev_dataset, shuffle=False, batch_size=args.batch_size,
+                                    collate_fn=dev_dataset.collate_fn)
 
         test_data = load_data(args.test, 'test')
         test_dataset = SentimentTestDataset(test_data, args)
-        test_dataloader = DataLoader(test_dataset, shuffle=False, batch_size=args.batch_size, collate_fn=test_dataset.collate_fn)
-        
-        dev_acc, dev_f1, dev_pred, dev_true, dev_sents, dev_sent_ids = model_eval(dev_dataloader, model, device)
+        test_dataloader = DataLoader(test_dataset, shuffle=False, batch_size=args.batch_size,
+                                     collate_fn=test_dataset.collate_fn)
+
+        dev_acc, dev_f1, dev_pred, dev_true, dev_sents, dev_sent_ids = model_eval(dev_dataloader, model, device, config)
         print('DONE DEV')
-        test_pred, test_sents, test_sent_ids = model_test_eval(test_dataloader, model, device)
+        test_pred, test_sents, test_sent_ids = model_test_eval(test_dataloader, model, device, config)
         print('DONE Test')
         with open(args.dev_out, "w+") as f:
             print(f"dev acc :: {dev_acc :.3f}")
             f.write(f"id \t Predicted_Sentiment \n")
-            for p, s in zip(dev_sent_ids,dev_pred ):
+            for p, s in zip(dev_sent_ids, dev_pred):
                 f.write(f"{p} , {s} \n")
 
         with open(args.test_out, "w+") as f:
             f.write(f"id \t Predicted_Sentiment \n")
-            for p, s  in zip(test_sent_ids,test_pred ):
+            for p, s in zip(test_sent_ids, test_pred):
                 f.write(f"{p} , {s} \n")
 
 

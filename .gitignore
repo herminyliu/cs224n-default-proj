@@ -1,0 +1,5 @@
+bert-base-uncased-manual-download/
+__pycache__/
+# Folder .idea is where Pycharm stores the configation of this proj.
+.idea/
+*.pt

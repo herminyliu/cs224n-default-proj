@@ -51,7 +51,7 @@ class BertSelfAttention(nn.Module):
         # - Before returning, concatenate multi-heads to recover the original shape:
         #   [bs, seq_len, num_attention_heads * attention_head_size = hidden_size].
 
-        # TODO: Seems the key and the query are the same shape,should transpose(key)=query?
+        # NOTE: Seems the key and the query are the same shape,should transpose(key)=query?
         # the shape of key and query:[bs, num_attention_heads, seq_len, attention_head_size]
         S = torch.matmul(query, key.transpose(-2, -1))  # Shape: [bs, num_attention_heads, seq_len, seq_len]
         # NOTE: key neet to be transposed to the form [bs, num_attention_heads, seq_len, attention_head_size]
@@ -166,6 +166,17 @@ class BertModel(BertPreTrainedModel):
         # Embedding layers.
         self.word_embedding = nn.Embedding(config.vocab_size, config.hidden_size, padding_idx=config.pad_token_id)
         self.pos_embedding = nn.Embedding(config.max_position_embeddings, config.hidden_size)
+
+        # NOTE: This config.max_position_embeddings = 512 when running classifier.py using dataset CFIMDB
+        # NOTE: But for one batch the sequence length is 514 > 512, which lead to the position embedding of that batch
+        # NOTE: is only 512, failed to match the shape of input embedding and token embedding. Thus
+        # NOTE: config.max_position_embeddings needs to be bigger.
+        # NOTE: Sadly, config.max_position_embeddings is inherited from BertPreTrainedModel
+        # NOTE: BertPreTrainedModel is initalized from the online pretrained google_bert model
+        # NOTE: So the config.max_position_embeddings is fixed to 512.
+        # NOTE: Next time we see the length 514\515\516 need to consider the probability of exceeding the config value
+        # NOTE: max length 512 first.
+
         self.tk_type_embedding = nn.Embedding(config.type_vocab_size, config.hidden_size)
         self.embed_layer_norm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.embed_dropout = nn.Dropout(config.hidden_dropout_prob)
@@ -186,6 +197,7 @@ class BertModel(BertPreTrainedModel):
         input_shape = input_ids.size()
         seq_length = input_shape[1]
 
+        # TODO: Find the input_id which the seq_length is larger than 512.
         # Get word embedding from self.word_embedding into input_embeds.
         inputs_embeds = self.word_embedding(input_ids)  # [batch_size?, seq_length, hidden_size]
 
@@ -228,20 +240,33 @@ class BertModel(BertPreTrainedModel):
 
         return hidden_states
 
-    def forward(self, input_ids, attention_mask):
+    def forward(self, input_ids, attention_mask, config):
         """
     input_ids: [batch_size, seq_len], seq_len is the max length of the batch
     attention_mask: same size as input_ids, 1 represents non-padding tokens, 0 represents padding tokens
     """
+        # Get the max length of the batch
+        sequence_length = input_ids.shape[1]
+
+        # Set the oversize_flag, when it is 1, meaning the max length of the batch is larger than pretrained model
+        # can hold, this batch will be disregarded.
+        oversize_flag = False
+
+        # Judge sequence_length is larger than config.max_position_embeddings or not
+        if sequence_length > config.max_position_embeddings:
+            oversize_flag = True
+            return {'oversize_flag': oversize_flag}
+
         # Get the embedding for each input token.
         embedding_output = self.embed(input_ids=input_ids)
 
         # Feed to a transformer (a stack of BertLayers).
         sequence_output = self.encode(embedding_output, attention_mask=attention_mask)
 
-        # Get cls token hidden state.
+        # Get cls token hidden state. And use a full connected network / tanh activation function to get pooler_out
         first_tk = sequence_output[:, 0]
         first_tk = self.pooler_dense(first_tk)
         first_tk = self.pooler_af(first_tk)
 
-        return {'last_hidden_state': sequence_output, 'pooler_output': first_tk}
+        # Add one more element in the returned tuple
+        return {'last_hidden_state': sequence_output, 'pooler_output': first_tk, 'oversize_flag': oversize_flag}

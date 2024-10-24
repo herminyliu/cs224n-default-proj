@@ -151,6 +151,7 @@ def get_from_cache(
       r = requests.head(url, headers=headers, allow_redirects=False, proxies=proxies, timeout=etag_timeout)
       r.raise_for_status()
       etag = r.headers.get("X-Linked-Etag") or r.headers.get("ETag")
+
       # We favor a custom header indicating the etag of the linked resource, and
       # we fallback to the regular etag header.
       # If we don't have any of those, raise an error.

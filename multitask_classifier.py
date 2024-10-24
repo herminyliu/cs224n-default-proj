@@ -73,17 +73,26 @@ class MultitaskBERT(nn.Module):
                 param.requires_grad = True
         # You will want to add layers here to perform the downstream tasks.
         ### TODO
-        raise NotImplementedError
+        self.cls_hs_to_logits_proj = torch.nn.Linear(in_features=config.hidden_size, out_features=self.num_labels)
+        self.cls_hs_dropout = torch.nn.Dropout(p=config.hidden_dropout_prob)
 
 
-    def forward(self, input_ids, attention_mask):
+    def forward(self, input_ids, attention_mask, config):
         'Takes a batch of sentences and produces embeddings for them.'
         # The final BERT embedding is the hidden state of [CLS] token (the first token)
         # Here, you can start by just returning the embeddings straight from BERT.
         # When thinking of improvements, you can later try modifying this
         # (e.g., by adding other layers).
         ### TODO
-        raise NotImplementedError
+        output = self.bert(input_ids, attention_mask, config)
+
+        if output['oversize_flag']:
+            return 0, output['oversize_flag']
+
+        output['pooler_output'] = self.cls_hs_dropout(output['pooler_output'])
+        logits = self.cls_hs_to_logits_proj(output['pooler_output'])
+
+        return logits, output['oversize_flag']
 
 
     def predict_sentiment(self, input_ids, attention_mask):
