@@ -33,19 +33,19 @@ Parts of the code are from the [`transformers`](https://github.com/huggingface/t
 
 ## Part 1: Implementation of the Multi-head Self-attention and Transformer Layers of the Original BERT Model
 
-*base_bert.py* should not be modified, since it provides the class *BertPreTrainedModel* which the BertModel class in *bert.py* inherited this.
+*base_bert.py* should not be modified, since it provides the class `BertPreTrainedModel` which the `BertModel` class in *bert.py* inherited this.
 
 In *bert.py*, there are three classes together formed the miniBERT structure.
 
-- BertSelfAttention: Construct the attention layer inside a BertLayer.
+- BertSelfAttention: Construct the attention layer inside a `BertLayer`.
 
 - BertLayer: Construct a single bert layer.
 
-- BertModel: The whole miniBERT model which is made up of many BertLayers.
+- BertModel: The whole miniBERT model which is made up of many `BertLayers`.
 
 ## Part 2: Self-defined Adam Optimizer Implementation
 
-In *optimizer.py*, a self-defined AdamW class is defined and used as the optimizer in *classifier.py*.
+In *optimizer.py*, a self-defined `AdamW` class is defined and used as the optimizer in *classifier.py*.
 
 ## Part 3: Perform Sentiment Classification Based on Finished Works
 
@@ -64,7 +64,7 @@ The accuracy my model obtained using the developing set for two fine tune modes 
 
 Note: 
 
-1. To avoid file encoding problem, in classifier.load_data we set the file opening using 'utf-8'.
+1. To avoid file encoding problem, in `classifier.load_data` we set the file opening using 'utf-8'.
 
 2. In mainland China hugging face can not be visited without VPN. Even when I use a VPN and switched it to the global mode, there is still something wrong with the Internet connection on my machine, so I manually download pytorch_model.bin, vocab.txt and config.json from https://huggingface.co/google-bert/bert-base-uncased/tree/main and place it in the folder ./bert-base-uncased-manual-download, and set local_files_only to be True. Files under the folder ./bert-base-uncased-manual-download is not tracked by git.
 
